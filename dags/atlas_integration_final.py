@@ -8,14 +8,12 @@ import requests
 import time
 import subprocess
 
-# Add scripts directory to path for importing verify_metadata
+# cripts directory to path for importing verify_metadata
 sys.path.append('/opt/airflow/scripts')
 
-# Add scripts directory to path for importing the Atlas metadata ingestion module
 try:
     from atlas_metadata_ingestion import AtlasMetadataIngestion, create_sample_etl_lineage
 except ImportError:
-    # For local development without Airflow
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts'))
     from atlas_metadata_ingestion import AtlasMetadataIngestion, create_sample_etl_lineage
 
@@ -30,7 +28,7 @@ default_args = {
 dag = DAG(
     'atlas_integration_final',
     default_args=default_args,
-    schedule_interval=None,  # Run manually
+    schedule_interval=None,  
     catchup=False,
 )
 
@@ -38,18 +36,19 @@ def check_atlas_status():
     """Check if Atlas is up and running."""
     atlas_url = "http://atlas:21000"
     try:
+        # here we are checking if the atlas connection is successful.
         # Create an Atlas client instance
         atlas_client = AtlasMetadataIngestion(atlas_url)
         
         # Check connection
         if atlas_client.check_connection():
-            print("✅ Atlas connection successful")
+            print("Atlas connection successful")
             return True
         else:
-            print("❌ Could not connect to Atlas")
+            print("Could not connect to Atlas")
             return False
     except Exception as e:
-        print(f"❌ Error checking Atlas status: {str(e)}")
+        print(f"Error checking Atlas status: {str(e)}")
         raise
 
 def create_hive_table():
@@ -126,13 +125,13 @@ def ingest_metadata_to_atlas():
         success = create_sample_etl_lineage(atlas_client, pipeline_name)
         
         if success:
-            print("✅ Successfully ingested metadata into Atlas")
+            print("Successfully ingested metadata into Atlas")
             return True
         else:
-            print("❌ Failed to ingest metadata into Atlas")
+            print("Failed to ingest metadata into Atlas")
             return False
     except Exception as e:
-        print(f"❌ Error ingesting metadata: {str(e)}")
+        print(f"Error ingesting metadata: {str(e)}")
         raise
 
 def verify_metadata_in_atlas():
@@ -230,22 +229,5 @@ create_dashboard_task = PythonOperator(
 # Set task dependencies
 check_atlas_task >> simulate_etl_task >> ingest_metadata_task >> verify_metadata_task >> create_dashboard_task
 
-# Add documentation
-"""### Atlas Integration ETL Pipeline
+ DAG to see how metadata is automatically captured for your ETL processes.
 
-This DAG demonstrates a complete ETL pipeline with Apache Atlas integration for metadata management and data lineage.
-
-#### Tasks:
-1. **check_atlas_status**: Verifies that Atlas is running and accessible
-2. **simulate_etl_process**: Simulates an ETL process (extraction, transformation, loading)
-3. **ingest_metadata_to_atlas**: Creates metadata entities in Atlas via the API to represent the ETL pipeline
-4. **verify_metadata_in_atlas**: Confirms that entities and lineage are properly created in Atlas
-5. **create_atlas_dashboard**: Creates a simulated dashboard for metadata insights
-
-#### Benefits:
-- Complete metadata capture for data assets
-- Automated lineage tracking between source and target tables
-- Governance capabilities through Atlas UI
-
-Run this DAG to see how metadata is automatically captured for your ETL processes.
-"""

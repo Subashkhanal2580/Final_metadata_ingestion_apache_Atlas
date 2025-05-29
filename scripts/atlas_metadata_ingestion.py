@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-"""
-Atlas Metadata Ingestion Script
-
-This script automates the creation of metadata entities in Atlas to track ETL processes.
-It creates database, table, and column entities and establishes lineage between them,
-simulating what the Hive hook would normally do.
-"""
-
 import requests
 import json
 import time

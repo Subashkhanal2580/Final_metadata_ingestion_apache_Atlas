@@ -1,13 +1,3 @@
-#!/usr/bin/env python
-"""
-Direct Atlas API Integration Test Script
-This script demonstrates direct interaction with the Atlas API to:
-1. Check Atlas status
-2. Create sample type definitions
-3. Create sample metadata entities
-4. Verify lineage creation
-"""
-
 import requests
 import json
 import time
@@ -32,15 +22,15 @@ def check_atlas_status():
         )
         
         if response.status_code == 200:
-            print("✅ Atlas is running")
+            print("Atlas is running")
             version_info = response.json()
             print(f"   Version: {version_info.get('Version', 'unknown')}")
             return True
         else:
-            print(f"❌ Atlas returned status code: {response.status_code}")
+            print(f"Atlas returned status code: {response.status_code}")
             return False
     except Exception as e:
-        print(f"❌ Error connecting to Atlas: {str(e)}")
+        print(f"Error connecting to Atlas: {str(e)}")
         return False
 
 def get_entity_types():
@@ -55,7 +45,7 @@ def get_entity_types():
         if response.status_code == 200:
             typedefs = response.json()
             entity_types = typedefs.get("entityDefs", [])
-            print(f"✅ Found {len(entity_types)} entity types in Atlas")
+            print(f"Found {len(entity_types)} entity types in Atlas")
             
             # Print some examples
             print("   Examples:")

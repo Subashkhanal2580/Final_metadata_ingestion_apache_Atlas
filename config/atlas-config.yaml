@@ -1,0 +1,19 @@
+atlas:
+  server:
+    url: http://localhost:21000
+    authentication:
+      type: basic
+      username: admin
+  metadata:
+    namespace: default
+    entity_types:
+      - database
+      - table
+      - column
+    ingestion:
+      batch_size: 100
+      retry_attempts: 3
+      retry_delay: 5
+  logging:
+    level: INFO
+    file: logs/metadata_ingestion.log 
