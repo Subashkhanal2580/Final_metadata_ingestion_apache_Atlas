@@ -1,10 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Union
 import requests
 import time
 from requests.exceptions import RequestException
 from dateutil.parser import parse as parse_date
 import logging
+import uuid
+import random
 
 # Configure logging
 logging.basicConfig(
@@ -464,3 +466,83 @@ class FinancialMetadataManager:
         except RequestException as e:
             logger.error(f"Error creating business glossary: {str(e)}")
             return None
+
+    def generate_random_account(self) -> Dict:
+        """
+        Generate random account data.
+        
+        Returns:
+            Dict: Random account data
+        """
+        account_number = f"ACCT-{uuid.uuid4().hex[:8]}"
+        account_type = random.choice(['Checking', 'Savings', 'Credit Card', 'Loan'])
+        balance = round(random.uniform(-1000, 10000), 2)
+        currency = 'USD'
+        customer_id = f"CUST-{uuid.uuid4().hex[:8]}"
+        open_date = (datetime.now() - timedelta(days=random.randint(0, 1825))).isoformat()
+        status = random.choice(['Active', 'Closed', 'Frozen'])
+        return {
+            'accountNumber': account_number,
+            'accountType': account_type,
+            'balance': balance,
+            'currency': currency,
+            'customerID': customer_id,
+            'openDate': open_date,
+            'status': status
+        }
+
+    def generate_random_transaction(self, account_number: str) -> Dict:
+        """
+        Generate random transaction data for a given account.
+        
+        Args:
+            account_number (str): Account number to link the transaction to
+        
+        Returns:
+            Dict: Random transaction data
+        """
+        transaction_id = f"TRANS-{uuid.uuid4().hex[:8]}"
+        transaction_type = random.choice(['Deposit', 'Withdrawal', 'Transfer', 'Payment'])
+        amount = round(random.uniform(1, 10000), 2)
+        if transaction_type in ['Withdrawal', 'Payment']:
+            amount = -amount
+        currency = 'USD'
+        transaction_date = (datetime.now() - timedelta(days=random.randint(0, 30))).isoformat()
+        status = random.choice(['Completed', 'Pending', 'Failed'])
+        merchant_name = random.choice(['Amazon', 'Walmart', 'Target', '']) if transaction_type == 'Payment' else ''
+        category = random.choice(['Retail', 'Grocery', 'Entertainment', '']) if merchant_name else ''
+        return {
+            'transactionID': transaction_id,
+            'accountID': account_number,
+            'transactionType': transaction_type,
+            'amount': amount,
+            'currency': currency,
+            'transactionDate': transaction_date,
+            'status': status,
+            'merchantName': merchant_name,
+            'category': category
+        }
+
+    def create_random_entities(self, num_accounts: int = 5, transactions_per_account: int = 10):
+        """
+        Create random accounts and transactions in Atlas.
+        
+        Args:
+            num_accounts (int): Number of accounts to create
+            transactions_per_account (int): Number of transactions per account
+        """
+        account_guids = []
+        for _ in range(num_accounts):
+            account_data = self.generate_random_account()
+            guid = self.create_account_entity(account_data)
+            account_guids.append((guid, account_data['accountNumber']))
+        
+        transaction_guids = []
+        for _, account_number in account_guids:
+            for _ in range(transactions_per_account):
+                transaction_data = self.generate_random_transaction(account_number)
+                guid = self.create_transaction_entity(transaction_data)
+                transaction_guids.append(guid)
+        
+        logger.info(f"Created {len(account_guids)} accounts and {len(transaction_guids)} transactions")
+        return account_guids, transaction_guids

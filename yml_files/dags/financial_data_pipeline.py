@@ -1,21 +1,9 @@
-"""
-Financial Data Pipeline with Apache Atlas Integration
-
-This DAG orchestrates a complete financial data pipeline with comprehensive 
-metadata management in Apache Atlas, including:
-1. Financial transaction data generation
-2. Custom entity type creation
-3. Classification and tagging
-4. Business glossary management
-5. Lineage tracking
-6. Technical, business, and operational metadata
-"""
-
 from datetime import datetime, timedelta
 import os
 import sys
 import json
 import random
+import uuid
 import pandas as pd
 import logging
 from sqlalchemy import create_engine
@@ -106,7 +94,7 @@ def setup_atlas_environment(**kwargs):
     }
 
 def generate_financial_data(**kwargs):
-    logger.info("Generating sample financial data")
+    logger.info("Generating sample financial data with unique identifiers")
     
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
@@ -116,12 +104,13 @@ def generate_financial_data(**kwargs):
     statuses = ["ACTIVE", "INACTIVE", "SUSPENDED", "CLOSED"]
     
     for i in range(1, num_accounts + 1):
+        account_number = f"ACCT-{uuid.uuid4().hex[:8]}"
         account = {
-            "accountNumber": f"{1000 + i}",
+            "accountNumber": account_number,
             "accountType": random.choice(account_types),
             "balance": round(random.uniform(1000, 50000), 2),
             "currency": "USD",
-            "customerID": f"CUST-{100 + i}",
+            "customerID": f"CUST-{uuid.uuid4().hex[:8]}",
             "openDate": (datetime.now() - timedelta(days=random.randint(30, 365))).strftime("%Y-%m-%d"),
             "status": random.choice(statuses)
         }
@@ -144,8 +133,9 @@ def generate_financial_data(**kwargs):
     
     for i in range(1, num_transactions + 1):
         account = random.choice(accounts)
+        transaction_id = f"TXN-{uuid.uuid4().hex[:8]}"
         transaction = {
-            "transactionID": f"TXN-{10000 + i}",
+            "transactionID": transaction_id,
             "accountID": account["accountNumber"],
             "transactionType": random.choice(transaction_types),
             "amount": round(random.uniform(10, 1000), 2),
@@ -165,7 +155,7 @@ def generate_financial_data(**kwargs):
     except Exception as e:
         raise Exception(f"Failed to save transactions file: {str(e)}")
     
-    logger.info(f"Generated {len(accounts)} accounts and {len(transactions)} transactions")
+    logger.info(f"Generated {len(accounts)} accounts and {len(transactions)} transactions with unique identifiers")
     return {
         "accounts_file": accounts_file,
         "transactions_file": transactions_file
