@@ -47,7 +47,7 @@ The primary workflow is orchestrated by the [financial_data_pipeline.py](cci:7:/
     *   Defines the tasks, their dependencies, and the overall workflow schedule.
     *   Imports and utilizes [FinancialMetadataManager](cci:2://file:///d:/apache_atlas/yml_files/dags/financial_metadata_manager.py:17:0-547:47) for all Atlas interactions.
 
-*   **[dags/financial_metadata_manager.py](cci:7://file:///d:/apache_atlas/yml_files/dags/financial_metadata_manager.py:0:0-0:0) (or `scripts/financial_metadata_manager.py` if moved):**
+*   **[dags/financial_metadata_manager.py](cci:7://file:///d:/apache_atlas/yml_files/dags/financial_metadata_manager.py:0:0-0:0) :**
     *   A Python class ([FinancialMetadataManager](cci:2://file:///d:/apache_atlas/yml_files/dags/financial_metadata_manager.py:17:0-547:47)) that encapsulates all logic for interacting with Apache Atlas.
     *   **Responsibilities:**
         *   Connecting to the Atlas REST API.
