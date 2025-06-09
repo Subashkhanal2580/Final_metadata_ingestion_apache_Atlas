@@ -3,6 +3,7 @@ version: '3.8'
 services:
   # Apache Atlas Service
   atlas:
+
     image: sburn/apache-atlas:2.3.0
     container_name: atlas
     ports:
@@ -25,7 +26,9 @@ services:
 
   # Apache Airflow (assuming it's already set up, but included for completeness)
   airflow-webserver:
-    image: apache/airflow:2.6.0
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: airflow-webserver
     depends_on:
       - airflow-init
@@ -52,7 +55,9 @@ services:
       retries: 5
 
   airflow-scheduler:
-    image: apache/airflow:2.6.0
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: airflow-scheduler
     depends_on:
       - airflow-webserver
@@ -72,7 +77,9 @@ services:
     command: scheduler
 
   airflow-init:
-    image: apache/airflow:2.6.0
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: airflow-init
     depends_on:
       - postgres
@@ -93,7 +100,6 @@ services:
       - _AIRFLOW_WWW_USER_USERNAME=admin
       - _AIRFLOW_WWW_USER_PASSWORD=admin
     command: version
-    entrypoint: /bin/bash
     restart: "no"
 
   # PostgreSQL for Airflow metadata
@@ -155,30 +161,96 @@ services:
       - spark
 
   # Apache Hive (Metastore)
-  hive:
-    image: apache/hive:3.1.3
-    container_name: hive
-    ports:
-      - "9083:9083"  # Metastore
-      - "10000:10000"  # HiveServer2
-      - "10002:10002"  # HiveServer2 Web UI
-    environment:
-      - HIVE_SITE_CONF_hive_metastore_uris=thrift://localhost:9083
-    volumes:
-      - ./config/hive-site.xml:/opt/apache-hive-3.1.3-bin/conf/hive-site.xml:ro
-      - ./data:/opt/hive/data
-    networks:
-      - etl_network
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "9083"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+  # hive:
+  #   image: apache/hive:3.1.3
+  #   container_name: hive
+  #   ports:
+  #     - "9083:9083"  # Metastore
+  #     - "10000:10000"  # HiveServer2
+  #     - "10002:10002"  # HiveServer2 Web UI
+  #   environment:
+  #     - HIVE_SITE_CONF_hive_metastore_uris=thrift://localhost:9083
+  #   volumes:
+  #     - ./config/hive-site.xml:/opt/apache-hive-3.1.3-bin/conf/hive-site.xml:ro
+  #     - ./data:/opt/hive/data
+  #   networks:
+  #     - etl_network
+  #   healthcheck:
+  #     test: ["CMD", "nc", "-z", "localhost", "9083"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
 
+
+  # hive-metastore-postgresql:
+  #   image: bde2020/hive-metastore-postgresql:2.3.0
+  #   container_name: hive-metastore-postgresql
+  #   volumes:
+  #     - hive-metastore-postgresql:/var/lib/postgresql
+  #   networks:
+  #     - etl_network
+
+  # hive-metastore:
+  #   image: bde2020/hive:2.3.2-postgresql-metastore
+  #   container_name: hive-metastore
+  #   env_file:
+  #     - ./hive-env.env
+  #   environment:
+  #     SERVICE_PRECONDITION: "hive-metastore-postgresql:5432"
+  #   depends_on:
+  #     - hive-metastore-postgresql
+  #   networks:
+  #     - etl_network
+
+  # hive-server:
+  #   image: bde2020/hive:2.3.2-postgresql-metastore
+  #   container_name: hive-server
+  #   env_file:
+  #     - ./hive-env.env
+  #   environment:
+  #     HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore-postgresql/metastore"
+  #     HIVE_CORE_CONF_javax_jdo_option_ConnectionDriverName: "org.postgresql.Driver"
+  #     HIVE_CORE_CONF_javax_jdo_option_ConnectionUserName: "hive"
+  #     HIVE_CORE_CONF_javax_jdo_option_ConnectionPassword: "hive"
+  #     HIVE_CORE_CONF_hive_metastore_uris: "thrift://hive-metastore:9083"
+  #     HIVE_CORE_CONF_hive_metastore_schema_verification: "false"
+  #     HIVE_CORE_CONF_hive_execution_engine: "tez"
+  #     SERVICE_PRECONDITION: "hive-metastore:9083"
+      
+  #     # Atlas integration
+  #     HIVE_SITE_CONF_hive_exec_post_hooks: "org.apache.atlas.hive.hook.HiveHook"
+  #     HIVE_SITE_CONF_atlas_hook_hive_synchronous: "true"
+  #     HIVE_SITE_CONF_atlas_cluster_name: "primary"
+  #     HIVE_SITE_CONF_atlas_rest_address: "http://atlas:21000"
+      
+  #     # Additional configurations to fix connectivity
+  #     HIVE_SERVER2_THRIFT_PORT: "10000"
+  #     HIVE_SERVER2_THRIFT_BIND_HOST: "0.0.0.0"
+  #     HIVE_SITE_CONF_hive_server2_transport_mode: "binary"
+  #     HIVE_SITE_CONF_hive_server2_thrift_bind_host: "0.0.0.0"
+  #     HIVE_SITE_CONF_hive_server2_thrift_port: "10000"
+  #     HIVE_SITE_CONF_hive_server2_enable_doAs: "false"
+  #   ports:
+  #     - "10000:10000"
+  #     - "10002:10002"
+  #   depends_on:
+  #     - hive-metastore
+  #   networks:
+  #     - etl_network
+  #   volumes:
+  #     - ./data:/input
+  #     - ./hive-atlas-bridge:/opt/hive/atlas-hook
+  #   command: >
+  #     sh -c "
+  #     cp -r /opt/hive/atlas-hook/* /opt/hive/lib/ && 
+  #     /entrypoint.sh /opt/hive/bin/hiveserver2"
+
+  
 volumes:
   atlas_data:
   atlas_logs:
   postgres_data:
+  hive-metastore-postgresql:
 
 networks:
   etl_network:

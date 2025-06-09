@@ -63,12 +63,25 @@ OUTPUT_DIR = "/tmp/financial_data"
 def setup_atlas_environment(**kwargs):
     """
     Set up the Atlas environment for financial metadata management.
-    This includes creating classifications, entity types, and a business glossary.
     """
     logger.info("Setting up Atlas environment for financial metadata")
     
+    # Log module path for debugging
+    module_name = FinancialMetadataManager.__module__
+    module_file = sys.modules[module_name].__file__ if module_name in sys.modules else "Unknown"
+    logger.info(f"Loaded FinancialMetadataManager from module: {module_name} at {module_file}")
+    
     # Initialize the metadata manager
-    metadata_manager = FinancialMetadataManager(ATLAS_URL)
+    try:
+        metadata_manager = FinancialMetadataManager(ATLAS_URL)
+    except TypeError as e:
+        logger.error(f"Failed to initialize FinancialMetadataManager: {str(e)}")
+        raise
+    
+    # Verify check_connection exists
+    if not hasattr(metadata_manager, 'check_connection'):
+        logger.error("FinancialMetadataManager does not have check_connection method")
+        raise AttributeError("FinancialMetadataManager missing check_connection method")
     
     # Check connection to Atlas
     if not metadata_manager.check_connection():
@@ -93,18 +106,12 @@ def setup_atlas_environment(**kwargs):
     }
 
 def generate_financial_data(**kwargs):
-    """
-    Generate sample financial transaction data.
-    """
     logger.info("Generating sample financial data")
     
-    # Create output directory if it doesn't exist
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    # Generate account data
     num_accounts = 10
     accounts = []
-    
     account_types = ["CHECKING", "SAVINGS", "CREDIT", "INVESTMENT"]
     statuses = ["ACTIVE", "INACTIVE", "SUSPENDED", "CLOSED"]
     
@@ -120,15 +127,16 @@ def generate_financial_data(**kwargs):
         }
         accounts.append(account)
     
-    # Save account data
     accounts_file = os.path.join(OUTPUT_DIR, "accounts.json")
-    with open(accounts_file, "w") as f:
-        json.dump(accounts, f, indent=2)
+    try:
+        with open(accounts_file, "w") as f:
+            json.dump(accounts, f, indent=2)
+        logger.info(f"Saved {len(accounts)} accounts to {accounts_file}")
+    except Exception as e:
+        raise Exception(f"Failed to save accounts file: {str(e)}")
     
-    # Generate transaction data
     num_transactions = 100
     transactions = []
-    
     transaction_types = ["DEPOSIT", "WITHDRAWAL", "TRANSFER", "PAYMENT", "PURCHASE"]
     categories = ["GROCERIES", "UTILITIES", "ENTERTAINMENT", "SALARY", "RENT", "TRAVEL"]
     merchants = ["Walmart", "Amazon", "Netflix", "Starbucks", "Uber", "Shell", "AT&T"]
@@ -149,10 +157,13 @@ def generate_financial_data(**kwargs):
         }
         transactions.append(transaction)
     
-    # Save transaction data
     transactions_file = os.path.join(OUTPUT_DIR, "transactions.json")
-    with open(transactions_file, "w") as f:
-        json.dump(transactions, f, indent=2)
+    try:
+        with open(transactions_file, "w") as f:
+            json.dump(transactions, f, indent=2)
+        logger.info(f"Saved {len(transactions)} transactions to {transactions_file}")
+    except Exception as e:
+        raise Exception(f"Failed to save transactions file: {str(e)}")
     
     logger.info(f"Generated {len(accounts)} accounts and {len(transactions)} transactions")
     return {
@@ -161,96 +172,116 @@ def generate_financial_data(**kwargs):
     }
 
 def ingest_metadata_to_atlas(**kwargs):
-    """
-    Ingest financial metadata into Atlas.
-    """
     logger.info("Ingesting financial metadata to Atlas")
     
     # Get data file paths from previous task
     ti = kwargs['ti']
     data_files = ti.xcom_pull(task_ids='generate_financial_data')
     
+    if not data_files or 'accounts_file' not in data_files or 'transactions_file' not in data_files:
+        raise Exception("Missing data files from generate_financial_data task")
+    
     accounts_file = data_files['accounts_file']
     transactions_file = data_files['transactions_file']
     
-    # Load the data
-    with open(accounts_file, "r") as f:
-        accounts = json.load(f)
+    # Validate file existence
+    if not os.path.exists(accounts_file) or not os.path.exists(transactions_file):
+        raise Exception(f"Data files not found: accounts_file={accounts_file}, transactions_file={transactions_file}")
     
-    with open(transactions_file, "r") as f:
-        transactions = json.load(f)
+    # Load the data
+    try:
+        with open(accounts_file, "r") as f:
+            accounts = json.load(f)
+        with open(transactions_file, "r") as f:
+            transactions = json.load(f)
+    except Exception as e:
+        raise Exception(f"Failed to load data files: {str(e)}")
+    
+    if not accounts or not transactions:
+        raise Exception("No accounts or transactions found in input files")
+    
+    logger.info(f"Loaded {len(accounts)} accounts and {len(transactions)} transactions")
     
     # Initialize the metadata manager
     metadata_manager = FinancialMetadataManager(ATLAS_URL)
     
+    if not metadata_manager.check_connection():
+        raise Exception("Cannot connect to Atlas")
+    
     # Create account entities
     account_guids = {}
     for account in accounts:
-        guid = metadata_manager.create_account_entity(account)
-        if guid:
-            account_guids[account["accountNumber"]] = guid
-            
-            # Apply classifications based on account type
-            if account["accountType"] == "CHECKING" or account["accountType"] == "SAVINGS":
-                metadata_manager.classify_entity(
-                    guid, 
-                    "Customer_Sensitive", 
-                    {"dataOwner": "retail.banking@example.com", "reviewDate": datetime.now().strftime("%Y-%m-%d")}
-                )
-                
-                metadata_manager.classify_entity(
-                    guid,
-                    "PII",
-                    {"piiType": "financial_account", "encryptionRequired": True}
-                )
+        try:
+            guid = metadata_manager.create_account_entity(account)
+            if guid:
+                account_guids[account["accountNumber"]] = guid
+                # Apply classifications
+                if account["accountType"] in ["CHECKING", "SAVINGS"]:
+                    metadata_manager.classify_entity(
+                        guid, 
+                        "Customer_Sensitive", 
+                        {"dataOwner": "retail.banking@example.com", "reviewDate": datetime.now().strftime("%Y-%m-%d")}
+                    )
+                    metadata_manager.classify_entity(
+                        guid,
+                        "PII",
+                        {"piiType": "financial_account", "encryptionRequired": True}
+                    )
+            else:
+                logger.warning(f"Failed to create entity for account {account['accountNumber']}")
+        except Exception as e:
+            logger.error(f"Error creating account entity for {account['accountNumber']}: {str(e)}")
     
     # Create transaction entities
     transaction_guids = []
     for transaction in transactions:
-        guid = metadata_manager.create_transaction_entity(transaction)
-        if guid:
-            transaction_guids.append(guid)
-            
-            # Apply classifications based on transaction amount
-            if transaction["amount"] > 500:
-                metadata_manager.classify_entity(
-                    guid,
-                    "High_Value_Transaction",
-                    {"thresholdValue": 500.0, "requiresApproval": True}
-                )
-            
-            # Apply regulatory classification if needed
-            if transaction["amount"] > 10000:
-                metadata_manager.classify_entity(
-                    guid,
-                    "Financial_Regulatory",
-                    {"regulationType": "AML", "complianceOwner": "compliance@example.com"}
-                )
+        try:
+            guid = metadata_manager.create_transaction_entity(transaction)
+            if guid:
+                transaction_guids.append(guid)
+                # Apply classifications
+                if transaction["amount"] > 500:
+                    metadata_manager.classify_entity(
+                        guid,
+                        "High_Value_Transaction",
+                        {"thresholdValue": 500.0, "requiresApproval": True}
+                    )
+                if transaction["amount"] > 10000:
+                    metadata_manager.classify_entity(
+                        guid,
+                        "Financial_Regulatory",
+                        {"regulationType": "AML", "complianceOwner": "compliance@example.com"}
+                    )
+            else:
+                logger.warning(f"Failed to create entity for transaction {transaction['transactionID']}")
+        except Exception as e:
+            logger.error(f"Error creating transaction entity for {transaction['transactionID']}: {str(e)}")
     
-    # Create lineage between accounts and transactions
-    if account_guids and transaction_guids:
-        # Group transactions by account
-        account_transactions = {}
-        for transaction in transactions:
-            account_id = transaction["accountID"]
-            if account_id in account_guids:
-                if account_id not in account_transactions:
-                    account_transactions[account_id] = []
-                account_transactions[account_id].append(transaction["transactionID"])
-        
-        # Create lineage for each account and its transactions
-        for account_id, txn_ids in account_transactions.items():
-            # Find the GUIDs for the transactions
-            txn_guids = [guid for guid, txn in zip(transaction_guids, transactions) 
-                        if txn["transactionID"] in txn_ids]
-            
-            if txn_guids:
+    if not account_guids or not transaction_guids:
+        raise Exception(f"No entities created: {len(account_guids)} accounts, {len(transaction_guids)} transactions")
+    
+    # Create lineage
+    account_transactions = {}
+    for transaction in transactions:
+        account_id = transaction["accountID"]
+        if account_id in account_guids:
+            if account_id not in account_transactions:
+                account_transactions[account_id] = []
+            account_transactions[account_id].append(transaction["transactionID"])
+    
+    for account_id, txn_ids in account_transactions.items():
+        txn_guids = [guid for guid, txn in zip(transaction_guids, transactions) 
+                    if txn["transactionID"] in txn_ids]
+        if txn_guids:
+            try:
                 metadata_manager.create_lineage(
                     f"account_transactions_{account_id}",
                     [account_guids[account_id]],
                     txn_guids,
                     f"Transactions for account {account_id}"
                 )
+            except Exception as e:
+                logger.error(f"Error creating lineage for account {account_id}: {str(e)}")
     
     logger.info(f"Successfully ingested metadata for {len(account_guids)} accounts and {len(transaction_guids)} transactions")
     return {
@@ -259,28 +290,47 @@ def ingest_metadata_to_atlas(**kwargs):
     }
 
 def verify_metadata_ingestion(**kwargs):
-    """
-    Verify that the metadata was successfully ingested into Atlas.
-    """
     logger.info("Verifying metadata ingestion")
     
     # Get entity GUIDs from previous task
     ti = kwargs['ti']
     entity_guids = ti.xcom_pull(task_ids='ingest_metadata_to_atlas')
     
-    if not entity_guids or not entity_guids.get('account_guids') or not entity_guids.get('transaction_guids'):
-        raise Exception("No entity GUIDs found from previous task")
+    if not entity_guids:
+        raise Exception("No entity GUIDs returned from ingest_metadata_to_atlas task")
+    
+    if not isinstance(entity_guids, dict):
+        raise Exception(f"Invalid entity_guids format: {type(entity_guids)}")
+    
+    account_guids = entity_guids.get('account_guids', [])
+    transaction_guids = entity_guids.get('transaction_guids', [])
+    
+    if not account_guids and not transaction_guids:
+        raise Exception("Both account_guids and transaction_guids are empty")
+    if not account_guids:
+        raise Exception("No account GUIDs found")
+    if not transaction_guids:
+        raise Exception("No transaction GUIDs found")
     
     # Initialize the metadata manager
     metadata_manager = FinancialMetadataManager(ATLAS_URL)
     
-    # Verify connection
     if not metadata_manager.check_connection():
         raise Exception("Failed to connect to Atlas")
     
-    # Sample verification - in a real scenario, you would do more thorough checks
-    logger.info(f"Successfully verified metadata ingestion for {len(entity_guids['account_guids'])} accounts "
-               f"and {len(entity_guids['transaction_guids'])} transactions")
+    # Optional: Verify a sample of GUIDs exist in Atlas
+    try:
+        for guid in account_guids[:1]:  # Check first GUID
+            if not metadata_manager.entity_exists(guid):
+                logger.warning(f"Account entity {guid} not found in Atlas")
+        for guid in transaction_guids[:1]:
+            if not metadata_manager.entity_exists(guid):
+                logger.warning(f"Transaction entity {guid} not found in Atlas")
+    except Exception as e:
+        logger.error(f"Error verifying entities: {str(e)}")
+    
+    logger.info(f"Successfully verified metadata ingestion for {len(account_guids)} accounts "
+                f"and {len(transaction_guids)} transactions")
     
     return True
 
